@@ -38,6 +38,7 @@ id BIGINT						 		= id;
 v_start_ts TIMESTAMP       		 		= start_ts;
 v_end_ts TIMESTAMP        		 		= end_ts;
 v_last_state INTEGER        		 		:= NULL;
+v_write_last_state INTEGER := NULL;
 v_last_ts TIMESTAMP         		 		:= NULL;
 v_cnt_dt INTEGER            		 		:= NULL;
 v_cnt_tp INTEGER           		 		:= NULL;
@@ -112,14 +113,21 @@ FOR evdu IN SELECT * FROM events_duration LOOP
 	v_current_state=COALESCE(v_last_state, evdu.last_state);
   END IF;
 
+  -- We need v_write_last_state and v_last_state as separate variables to remember
+  -- the correct last_state also during downtimes - downtimes don't have to update
+  -- the correct last hard state
   IF evdu.type in ('hard_state', 'former_state', 'current_state') THEN
 	v_last_state := evdu.state;
+	v_write_last_state := v_last_state;
   ELSIF evdu.type = 'soft_state' THEN
     IF v_last_state is NULL THEN
       v_last_state := evdu.last_state;
+	  v_write_last_state := v_last_state;
 	END IF;
   ELSIF evdu.type IN ('dt_start', 'sla_end') THEN
-	v_last_state = 0;
+	v_write_last_state := 0;
+  ELSIF evdu.type IN ('dt_end', 'sla_start') THEN
+    v_write_last_state := v_last_state;
   END IF;
 
   IF v_add_duration IS NOT NULL AND v_cnt_dt = 0 and v_cnt_tp = 0
@@ -129,13 +137,21 @@ FOR evdu IN SELECT * FROM events_duration LOOP
     v_addd := 0;
   END IF;
 
-
-  IF evdu.type = 'dt_start'  THEN v_cnt_dt := COALESCE(v_cnt_dt, 0) + 1;
-  ELSIF evdu.type = 'dt_end'  THEN v_cnt_dt := COALESCE(v_cnt_dt -1, 0);
-  ELSIF evdu.type = 'sla_end'  THEN v_cnt_tp := COALESCE(v_cnt_tp, 0) + 1;
-  ELSIF evdu.type = 'sla_start'  THEN v_cnt_tp := COALESCE(v_cnt_tp-1, 0);
+  IF evdu.type = 'dt_start'  THEN 
+	v_cnt_dt := COALESCE(v_cnt_dt, 0) + 1;
+	v_dt_depth := v_cnt_dt;
+  ELSIF evdu.type = 'dt_end'  THEN 
+	v_cnt_dt := COALESCE(v_cnt_dt -1, 0);
+	v_dt_depth := v_cnt_dt;
+  ELSIF evdu.type = 'sla_end'  THEN 
+	v_cnt_tp := COALESCE(v_cnt_tp, 0) + 1;
+	v_dt_depth := v_cnt_tp;
+  ELSIF evdu.type = 'sla_start'  THEN 
+	v_cnt_tp := COALESCE(v_cnt_tp-1, 0);
+	v_dt_depth := v_cnt_tp;
   ELSE v_dt_depth := v_cnt_dt + v_cnt_tp;
   END IF;
+  RAISE NOTICE 'type: %, v_cnt_dt: %, v_dt_depth: %', evdu.type, v_cnt_dt, v_dt_depth;
 
   v_start_time := COALESCE(v_last_ts, v_start_ts);
 
@@ -144,7 +160,7 @@ FOR evdu IN SELECT * FROM events_duration LOOP
   v_end_time := evdu.state_time;
 
   INSERT INTO t_duration ( duration, current_state, next_state, addd, dt_depth, type, start_time, end_time) VALUES
-  (v_add_duration, v_current_state, v_last_state, v_addd, v_dt_depth, evdu.type, v_start_time, v_end_time);
+  (v_add_duration, v_current_state, v_write_last_state, v_addd, v_dt_depth, evdu.type, v_start_time, v_end_time);
   v_add_duration := NULL;
 
 END LOOP;

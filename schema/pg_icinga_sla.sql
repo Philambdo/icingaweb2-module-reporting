@@ -25,19 +25,16 @@ AS $_$
 DECLARE 
 v_availability DECIMAL(7, 4);
 t_du RECORD;
-dummy_ID NUMERIC(20);
-type_id INTEGER;
-v_multiplicator INTEGER;
-v_sum_up INTEGER;
+v_type_id INTEGER;
+v_multiplicator INTEGER := 0;
+v_sum_up INTEGER := 0;
 
 
 BEGIN
-  SELECT objecttype_id INTO dummy_id FROM icinga_objects WHERE object_id = id;
-  IF dummy_id NOT IN (1, 2) THEN
+  SELECT objecttype_id INTO v_type_id FROM icinga_objects WHERE object_id = id;
+  IF v_type_id NOT IN (1, 2) THEN
     RETURN NULL;
   END IF;
-  SELECT objecttype_id INTO type_id FROM icinga_objects WHERE object_id = id;
-
 
   FOR t_du in SELECT * from icinga_sla_updown_period(id, start_ts, end_ts, sla_timeperiod_object_id)
  LOOP
@@ -57,9 +54,10 @@ BEGIN
     v_sum_up = v_sum_up + t_du.duration*v_multiplicator;
 END LOOP;
 
+RAISE NOTICE 'v_sum_up: %' , v_sum_up;
 v_availability = v_sum_up / (UNIX_TIMESTAMP(end_ts)-UNIX_TIMESTAMP(start_ts))::FLOAT * 100::FLOAT;
 
-RETURN v_avaiability;
+RETURN v_availability;
 
 END;
 $_$ LANGUAGE plpgsql SECURITY DEFINER;

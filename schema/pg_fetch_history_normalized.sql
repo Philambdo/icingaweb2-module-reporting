@@ -28,25 +28,14 @@ RETURNS TABLE (
 )
 AS $_$
 DECLARE 
-dummy_id BIGINT;
-former_id BIGINT						= id;
-former_sla_timeperiod_object_id BIGINT 	= sla_timeperiod_object_id;
-former_start TIMESTAMP 					= i_start_ts;
-former_end TIMESTAMP 				 	= i_end_ts;
 sla_timeperiod_object_id BIGINT			= sla_timeperiod_object_id;
 id BIGINT						 		= id;
 i_start_ts TIMESTAMP       		 		= i_start_ts;
 i_end_ts TIMESTAMP        		 		= i_end_ts;
-day_offset INTEGER       		 		= -1;
-var_last_state INTEGER        		 		:= NULL;
-last_ts TIMESTAMP         		 		:= NULL;
-cnt_dt INTEGER            		 		:= NULL;
-cnt_tp INTEGER           		 		:= NULL;
-add_duration INTEGER     		 		:= NULL;
-type_id INTEGER							:= NULL;
 
 BEGIN
 
+RAISE NOTICE 'i_start_ts: %, i_end_ts: %', i_start_ts, i_end_ts;
 
 RETURN QUERY SELECT
      state_time,
